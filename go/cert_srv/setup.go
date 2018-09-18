@@ -115,9 +115,8 @@ func initState(config *Config) error {
 	msger.AddHandler(infra.Chain, newConf.Store.NewChainPushHandler())
 	msger.AddHandler(infra.TRC, newConf.Store.NewTRCPushHandler())
 	msger.AddHandler(infra.ChainIssueRequest, &ReissHandler{})
-	msger.AddHandler(infra.DRKeyLvl1Request, &DRKeyHandler{})
-	msger.AddHandler(infra.DRKeyLvl1Reply, &DRKeyHandler{})
-	//msger.AddHandler(infra.DRKeyLvl2Request, &DRKeyHandler{})
+	msger.AddHandler(infra.DRKeyLvl1Request, &DRKeyReqHandler{})
+	msger.AddHandler(infra.DRKeyLvl1Reply, &DRKeyRepHandler{})
 	msger.UpdateSigner(newConf.GetSigner(), []infra.MessageType{infra.ChainIssueRequest})
 	msger.UpdateVerifier(newConf.GetVerifier())
 	go func() {
