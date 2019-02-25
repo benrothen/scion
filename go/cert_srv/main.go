@@ -25,6 +25,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/scionproto/scion/go/cert_srv/internal/config"
+	"github.com/scionproto/scion/go/cert_srv/internal/drkey"
 	"github.com/scionproto/scion/go/cert_srv/internal/reiss"
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/discovery"
@@ -45,6 +46,7 @@ var (
 	reissRunner *periodic.Runner
 	discRunners idiscovery.Runners
 	corePusher  *periodic.Runner
+	drkeyRunner *periodic.Runner
 	msgr        infra.Messenger
 )
 
@@ -179,6 +181,19 @@ func startDiscovery() {
 	}
 }
 
+func startDrkeyRunner() {
+	drkeyRunner = periodic.StartPeriodicTask(
+		&drkey.Requester{
+			Msgr:  msgr,
+			State: state,
+			IA:    cfg.General.Topology.ISD_AS,
+		},
+		// TODO(ben): add to config
+		periodic.NewTicker(time.Hour),
+		time.Minute,
+	)
+}
+
 func stopReissRunner() {
 	if corePusher != nil {
 		corePusher.Stop()
@@ -188,8 +203,15 @@ func stopReissRunner() {
 	}
 }
 
+func stopDrkeyRunner() {
+	if drkeyRunner != nil {
+		drkeyRunner.Stop()
+	}
+}
+
 func stop() {
 	stopReissRunner()
+	stopDrkeyRunner()
 	discRunners.Stop()
 	msgr.CloseServer()
 }
