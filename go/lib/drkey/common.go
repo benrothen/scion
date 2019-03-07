@@ -18,11 +18,11 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 
-	"github.com/scionproto/scion/go/lib/addr"
-	"github.com/scionproto/scion/go/lib/scrypto"
 	"golang.org/x/crypto/pbkdf2"
 
+	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
+	"github.com/scionproto/scion/go/lib/scrypto"
 )
 
 const (

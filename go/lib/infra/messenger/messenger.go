@@ -698,85 +698,114 @@ func (m *Messenger) sendWithAck(ctx context.Context, msg proto.Cerealizable, a n
 func (m *Messenger) RequestDRKeyLvl1(ctx context.Context, msg *drkey_mgmt.DRKeyLvl1Req, a net.Addr,
 	id uint64) (*drkey_mgmt.DRKeyLvl1Rep, error) {
 
-	debug_id := util.GetDebugID()
-	logger := m.log.New("debug_id", debug_id)
+	opMetric := metricStartOp(infra.DRKeyLvl1Request)
+	drkey, err := m.requestDRKeyLvl1(ctx, msg, a, id)
+	opMetric.publishResult(err)
+	return drkey, err
+}
+
+func (m *Messenger) requestDRKeyLvl1(ctx context.Context, msg *drkey_mgmt.DRKeyLvl1Req, a net.Addr,
+	id uint64) (*drkey_mgmt.DRKeyLvl1Rep, error) {
+
 	pld, err := ctrl.NewDRKeyMgmtPld(msg, nil, &ctrl.Data{ReqId: id})
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("[Messenger] Sending request", "req_type", infra.DRKeyLvl1Request,
+	logger := log.FromCtx(ctx)
+	logger.Trace("[Messenger] Sending request", "req_type", infra.DRKeyLvl1Request,
 		"msg_id", id, "request", msg, "peer", a)
-	replyCtrlPld, _, err :=
-		m.getRequester(infra.DRKeyLvl1Request, infra.DRKeyLvl1Reply).Request(ctx, pld, a)
+	replyCtrlPld, _, err := m.getRequester(infra.DRKeyLvl1Request).Request(ctx, pld, a)
 	if err != nil {
-		return nil, common.NewBasicError("[Messenger] Request error", err, "debug_id", debug_id)
+		return nil, common.NewBasicError("[Messenger] Request error", err)
 	}
 	_, replyMsg, err := m.validate(replyCtrlPld)
 	if err != nil {
-		return nil, common.NewBasicError("[Messenger] Reply validation failed", err,
-			"debug_id", debug_id)
+		return nil, common.NewBasicError("[Messenger] Reply validation failed", err)
 	}
-	reply, ok := replyMsg.(*drkey_mgmt.DRKeyLvl1Rep)
-	if !ok {
+	switch reply := replyMsg.(type) {
+	case *drkey_mgmt.DRKeyLvl1Rep:
+		logger.Trace("[Messenger] Received reply", "reply", reply)
+		return reply, nil
+	case *ack.Ack:
+		return nil, &infra.Error{Message: reply}
+	default:
 		err := newTypeAssertErr("*drkey_mgmt.DRKeyLvl1Rep", replyMsg)
-		return nil, common.NewBasicError("[Messenger] Type assertion failed", err,
-			"debug_id", debug_id)
+		return nil, common.NewBasicError("[Messenger] Type assertion failed", err)
 	}
-	logger.Debug("[Messenger] Received reply")
-	return reply, nil
 }
 
 func (m *Messenger) SendDRKeyLvl1(ctx context.Context, msg *drkey_mgmt.DRKeyLvl1Rep, a net.Addr,
 	id uint64) error {
 
-	pld, err := ctrl.NewDRKeyMgmtPld(msg, nil, &ctrl.Data{ReqId: id})
-	if err != nil {
-		return err
-	}
-	m.log.Debug("[Messenger] Sending Notify", "type", infra.DRKeyLvl1Request, "to", a, "id", id)
-	return m.getRequester(infra.DRKeyLvl1Request, infra.DRKeyLvl1Reply).Notify(ctx, pld, a)
+	opMetrics := metricStartOp(infra.DRKeyLvl1Reply)
+	err := m.sendDRKeyLvl1(ctx, msg, a, id)
+	opMetrics.publishResult(err)
+	return err
 }
 
-func (m *Messenger) RequestDRKeyLvl2(ctx context.Context, msg *drkey_mgmt.DRKeyLvl2Req, a net.Addr,
-	id uint64) (*drkey_mgmt.DRKeyLvl2Rep, error) {
-
-	debug_id := util.GetDebugID()
-	logger := m.log.New("debug_id", debug_id)
-	pld, err := ctrl.NewDRKeyMgmtPld(msg, nil, &ctrl.Data{ReqId: id})
-	if err != nil {
-		return nil, err
-	}
-	logger.Debug("[Messenger] Sending request", "req_type", infra.DRKeyLvl2Request,
-		"msg_id", id, "request", msg, "peer", a)
-	replyCtrlPld, _, err :=
-		m.getRequester(infra.DRKeyLvl2Request, infra.DRKeyLvl2Reply).Request(ctx, pld, a)
-	if err != nil {
-		return nil, common.NewBasicError("[Messenger] Request error", err, "debug_id", debug_id)
-	}
-	_, replyMsg, err := m.validate(replyCtrlPld)
-	if err != nil {
-		return nil, common.NewBasicError("[Messenger] Reply validation failed", err,
-			"debug_id", debug_id)
-	}
-	reply, ok := replyMsg.(*drkey_mgmt.DRKeyLvl2Rep)
-	if !ok {
-		err := newTypeAssertErr("*drkey_mgmt.DRKeyLvl2Rep", replyMsg)
-		return nil, common.NewBasicError("[Messenger] Type assertion failed", err,
-			"debug_id", debug_id)
-	}
-	logger.Debug("[Messenger] Received reply")
-	return reply, nil
-}
-
-func (m *Messenger) SendDRKeyLvl2(ctx context.Context, msg *drkey_mgmt.DRKeyLvl2Rep, a net.Addr,
+func (m *Messenger) sendDRKeyLvl1(ctx context.Context, msg *drkey_mgmt.DRKeyLvl1Rep, a net.Addr,
 	id uint64) error {
 
 	pld, err := ctrl.NewDRKeyMgmtPld(msg, nil, &ctrl.Data{ReqId: id})
 	if err != nil {
 		return err
 	}
-	m.log.Debug("[Messenger] Sending Notify", "type", infra.DRKeyLvl2Request, "to", a, "id", id)
-	return m.getRequester(infra.DRKeyLvl2Request, infra.DRKeyLvl2Reply).Notify(ctx, pld, a)
+	return m.sendMessage(ctx, pld, a, id, infra.DRKeyLvl1Reply)
+}
+
+func (m *Messenger) RequestDRKeyLvl2(ctx context.Context, msg *drkey_mgmt.DRKeyLvl2Req, a net.Addr,
+	id uint64) (*drkey_mgmt.DRKeyLvl2Rep, error) {
+	return nil, nil
+}
+
+func (m *Messenger) requestDRKeyLvl2(ctx context.Context, msg *drkey_mgmt.DRKeyLvl2Req, a net.Addr,
+	id uint64) (*drkey_mgmt.DRKeyLvl2Rep, error) {
+
+	pld, err := ctrl.NewDRKeyMgmtPld(msg, nil, &ctrl.Data{ReqId: id})
+	if err != nil {
+		return nil, err
+	}
+	logger := log.FromCtx(ctx)
+	logger.Trace("[Messenger] Sending request", "req_type", infra.DRKeyLvl2Request,
+		"msg_id", id, "request", msg, "peer", a)
+	replyCtrlPld, _, err := m.getRequester(infra.DRKeyLvl2Request).Request(ctx, pld, a)
+	if err != nil {
+		return nil, common.NewBasicError("[Messenger] Request error", err)
+	}
+	_, replyMsg, err := m.validate(replyCtrlPld)
+	if err != nil {
+		return nil, common.NewBasicError("[Messenger] Reply validation failed", err)
+	}
+
+	switch reply := replyMsg.(type) {
+	case *drkey_mgmt.DRKeyLvl2Rep:
+		logger.Trace("[Messenger] Received reply", "reply", reply)
+		return reply, nil
+	case *ack.Ack:
+		return nil, &infra.Error{Message: reply}
+	default:
+		err := newTypeAssertErr("*drkey_mgmt.DRKeyLvl2Rep", replyMsg)
+		return nil, common.NewBasicError("[Messenger] Type assertion failed", err)
+	}
+}
+
+func (m *Messenger) SendDRKeyLvl2(ctx context.Context, msg *drkey_mgmt.DRKeyLvl2Rep, a net.Addr,
+	id uint64) error {
+
+	opMetrics := metricStartOp(infra.DRKeyLvl2Reply)
+	err := m.sendDRKeyLvl2(ctx, msg, a, id)
+	opMetrics.publishResult(err)
+	return err
+}
+
+func (m *Messenger) sendDRKeyLvl2(ctx context.Context, msg *drkey_mgmt.DRKeyLvl2Rep, a net.Addr,
+	id uint64) error {
+
+	pld, err := ctrl.NewDRKeyMgmtPld(msg, nil, &ctrl.Data{ReqId: id})
+	if err != nil {
+		return err
+	}
+	return m.sendMessage(ctx, pld, a, id, infra.DRKeyLvl2Reply)
 }
 
 // AddHandler registers a handler for msgType.
