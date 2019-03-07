@@ -3,11 +3,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "drkey_mgmt.go",
-        "drkey_lvl1_req.go",
         "drkey_lvl1_rep.go",
-        "drkey_lvl2_req.go",
+        "drkey_lvl1_req.go",
         "drkey_lvl2_rep.go",
+        "drkey_lvl2_req.go",
+        "drkey_mgmt.go",
     ],
     importpath = "github.com/scionproto/scion/go/lib/ctrl/drkey_mgmt",
     visibility = ["//visibility:public"],
