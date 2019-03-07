@@ -64,7 +64,10 @@ func (r *Requester) run(ctx context.Context) (bool, error) {
 	// - keep track of frequently connected ASes?
 	now := util.TimeToSecs(time.Now())
 	// FIXME(ben): how to determine destination?
-	dst := addr.IA{}
+	dst, err := addr.IAFromString("1-ff00:0:110")
+	if err != nil {
+		return true, err
+	}
 	return r.sendReq(ctx, dst, now)
 }
 

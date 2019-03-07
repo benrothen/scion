@@ -80,6 +80,8 @@ func realMain() int {
 	}
 	// Start the periodic reissuance task.
 	startReissRunner()
+	// Start the periodic drkey requester.
+	startDrkeyRunner()
 	// Start the periodic fetching from discovery service.
 	startDiscovery()
 	// Start the messenger.
@@ -189,7 +191,8 @@ func startDrkeyRunner() {
 			IA:    cfg.General.Topology.ISD_AS,
 		},
 		// TODO(ben): add to config
-		periodic.NewTicker(time.Hour),
+		periodic.NewTicker(10*time.Second),
+		// periodic.NewTicker(time.Hour),
 		time.Minute,
 	)
 }
