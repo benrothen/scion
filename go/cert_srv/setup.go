@@ -20,6 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/scionproto/scion/go/cert_srv/internal/csconfig"
+	"github.com/scionproto/scion/go/cert_srv/internal/drkey"
 	"github.com/scionproto/scion/go/cert_srv/internal/reiss"
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
@@ -98,43 +99,6 @@ func initState(config *Config) error {
 	err = config.state.Store.LoadAuthoritativeTRC(filepath.Join(config.General.ConfigDir, "certs"))
 	if err != nil {
 		return common.NewBasicError("Unable to load local TRC", err)
-	msger := messenger.New(
-		newConf.Topo.ISD_AS,
-		disp.New(
-			transport.NewPacketTransport(conn),
-			messenger.DefaultAdapter,
-			log.Root(),
-		),
-		newConf.Store,
-		log.Root(),
-		nil,
-	)
-	newConf.Store.SetMessenger(msger)
-	msger.AddHandler(infra.ChainRequest, newConf.Store.NewChainReqHandler(true))
-	msger.AddHandler(infra.TRCRequest, newConf.Store.NewTRCReqHandler(true))
-	msger.AddHandler(infra.Chain, newConf.Store.NewChainPushHandler())
-	msger.AddHandler(infra.TRC, newConf.Store.NewTRCPushHandler())
-	msger.AddHandler(infra.ChainIssueRequest, &ReissHandler{})
-	msger.AddHandler(infra.DRKeyLvl1Request, &DRKeyReqHandler{})
-	msger.AddHandler(infra.DRKeyLvl1Reply, &DRKeyRepHandler{})
-	msger.UpdateSigner(newConf.GetSigner(), []infra.MessageType{infra.ChainIssueRequest})
-	msger.UpdateVerifier(newConf.GetVerifier())
-	go func() {
-		defer log.LogPanicAndExit()
-		msger.ListenAndServe()
-	}()
-	if newConf.Topo.Core {
-		go func() {
-			defer log.LogPanicAndExit()
-			selfIssuer := NewSelfIssuer(msger)
-			selfIssuer.Run()
-		}()
-	} else {
-		go func() {
-			defer log.LogPanicAndExit()
-			reissRequester := NewReissRequester(msger)
-			reissRequester.Run()
-		}()
 	}
 	err = config.state.Store.LoadAuthoritativeChain(
 		filepath.Join(config.General.ConfigDir, "certs"))
@@ -194,6 +158,8 @@ func setMessenger(config *Config) error {
 	msgr.AddHandler(infra.TRCRequest, config.state.Store.NewTRCReqHandler(true))
 	msgr.AddHandler(infra.Chain, config.state.Store.NewChainPushHandler())
 	msgr.AddHandler(infra.TRC, config.state.Store.NewTRCPushHandler())
+	msgr.AddHandler(infra.DRKeyLvl1Request, &drkey.DRKeyReqHandler{})
+	msgr.AddHandler(infra.DRKeyLvl1Reply, &drkey.DRKeyRepHandler{})
 	msgr.UpdateSigner(config.state.GetSigner(), []infra.MessageType{infra.ChainIssueRequest})
 	msgr.UpdateVerifier(config.state.GetVerifier())
 	// Only core CS handles certificate reissuance requests.
